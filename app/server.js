@@ -1,6 +1,5 @@
 const Hapi = require('hapi')
 const Joi = require('joi')
-const Good = require('good')
 const S = Joi.string
 
 const server = new Hapi.Server()
