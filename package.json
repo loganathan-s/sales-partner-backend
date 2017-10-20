@@ -1,0 +1,46 @@
+{
+  "name": "sales-partner-backend",
+  "version": "1.0.0",
+  "description": "Sales Partner Backend app",
+  "lint-staged": {
+    "linters": {
+      "**/*.js": [
+        "prettier-standard",
+        "git add"
+      ]
+    }
+  },
+  "main": "./src/server.js",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^2.1.2",
+    "good": "^7.3.0",
+    "good-console": "^6.4.0",
+    "js-hash": "0.0.1",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2",
+    "stromdao-businessobject": "0.4.61"
+  },
+  "devDependencies": {
+    "babel-preset-env": "^1.6.0",
+    "eslint": "^4.9.0",
+    "husky": "^0.14.3",
+    "lint-staged": "^4.3.0",
+    "nyc": "^11.2.1",
+    "prettier-standard": "^7.0.3",
+    "snazzy": "^7.0.0",
+    "standard": "^10.0.3"
+  },
+  "scripts": {
+    "watch": "nodemon --watch app/**/*.js app/*.js",
+    "start": "nodemon ./app/server.js",
+    "coverage": "NODE_ENV=test nyc --reporter=html ava && open coverage/index.html",
+    "coveralls": "nyc report --reporter=text-lcov | coveralls",
+    "lint": "standard | snazzy",
+    "precommit": "lint-staged",
+    "pretest": "standard | snazzy -s",
+    "test": "NODE_ENV=test nyc ava",
+    "format": "prettier-standard '**/*.js'"
+  }
+}
