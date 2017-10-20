@@ -3,7 +3,8 @@ const Joi = require('joi')
 const S = Joi.string
 
 const server = new Hapi.Server()
-server.connection({ port: 3000, host: 'localhost' })
+
+server.connection({ port: process.env.PORT || 3000 })
 
 // Routes
 server.route([
@@ -32,9 +33,11 @@ server.route([
   }
 ])
 
-server.start(err => {
+server.register(require('hapi-heroku-helpers'), function (err) {
   if (err) {
     throw err
   }
-  console.log(`Server running at: ${server.info.uri}`)
+  server.start(function () {
+    console.log(`Server running at: ${server.info.uri}`)
+  })
 })
