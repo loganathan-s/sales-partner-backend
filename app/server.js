@@ -1,6 +1,7 @@
 const Hapi = require('hapi')
 const Joi = require('joi')
 const S = Joi.string
+const ScheduledJobs = require('../lib/cron')
 
 const server = new Hapi.Server()
 
@@ -41,3 +42,19 @@ server.register(require('hapi-heroku-helpers'), function (err) {
     console.log(`Server running at: ${server.info.uri}`)
   })
 })
+
+// ScheduledJobs
+server.register(
+  {
+    register: require('hapi-cron-job'),
+    options: {
+      jobs: ScheduledJobs.jobs,
+      callback: ScheduledJobs.callback // Executed at end of process and return enabledJobs
+    }
+  },
+  function (err) {
+    if (err) {
+      throw err
+    }
+  }
+)

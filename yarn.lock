@@ -2036,6 +2036,12 @@ handlebars@^4.0.3:
   optionalDependencies:
     uglify-js "^2.6"
 
+hapi-cron-job@^2.0.1:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/hapi-cron-job/-/hapi-cron-job-2.0.1.tgz#b7e0ddb3bc3bd976799baa8c4f59f0aabc9078ce"
+  dependencies:
+    joi "^9.1.0"
+
 hapi-heroku-helpers@^3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/hapi-heroku-helpers/-/hapi-heroku-helpers-3.0.0.tgz#5ddd37689a62fbaf914caec7d442e735ce59ebb7"
@@ -2632,6 +2638,16 @@ joi@^11.1.0:
   dependencies:
     hoek "4.x.x"
     isemail "3.x.x"
+    topo "2.x.x"
+
+joi@^9.1.0:
+  version "9.2.0"
+  resolved "https://registry.yarnpkg.com/joi/-/joi-9.2.0.tgz#3385ac790192130cbe230e802ec02c9215bbfeda"
+  dependencies:
+    hoek "4.x.x"
+    isemail "2.x.x"
+    items "2.x.x"
+    moment "2.x.x"
     topo "2.x.x"
 
 js-hash@0.0.1:
