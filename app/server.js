@@ -1,7 +1,7 @@
 const Hapi = require('hapi')
 const Joi = require('joi')
 const S = Joi.string
-const ScheduledJobs = require('../lib/cron')
+const scheduledJobs = require('../lib/scheduledJobs')
 
 const server = new Hapi.Server()
 
@@ -48,8 +48,8 @@ server.register(
   {
     register: require('hapi-cron-job'),
     options: {
-      jobs: ScheduledJobs.jobs,
-      callback: ScheduledJobs.callback // Executed at end of process and return enabledJobs
+      jobs: scheduledJobs.jobs,
+      callback: scheduledJobs.callback // Executed at end of process and return enabledJobs
     }
   },
   function (err) {

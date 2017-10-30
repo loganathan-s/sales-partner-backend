@@ -475,6 +475,12 @@ function createLedger (n, overwriteExisting) {
     .catch(err => console.error(err))
 }
 
+/**
+ * function createLedger
+ *
+ *  is redundant because createLedger does the same
+ *
+ */
 function buildLedger (n) {
   return n
     .stromkontoproxyfactory()
@@ -776,12 +782,11 @@ function fetchRemoteNodeAddress (extid, secret) {
   })
 }
 
-function appendYear (str) {
-  return str === 'billing' || str === 'entitlement'
-}
-
 /**
- * serialPromise executes Promises sequentially.
+ * function serialPromise
+ *
+ * executes Promises sequentially.
+ *
  * @param {funcs} An array of functions (funcs) that each return promises.
  * @example
  * const urls = ['/url1', '/url2', '/url3']
