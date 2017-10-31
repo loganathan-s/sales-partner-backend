@@ -132,14 +132,13 @@ var dataSet = [
 /* intitalise rootnode */
 
 const node = new fury.Node({
-  external_id: 'sevtest::rootnode',
-  privateKey: app.rootnode.privateKey || undefined,
+  external_id: 'sevtest::rootnode', // 0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+  // privateKey: app.rootnode.privateKey || undefined,
   testMode: true
 })
 console.log('---- rootnode -----')
 console.log(node.wallet.address)
 console.log('---- rootnode -----')
-
 function createTestRun () {
   let arr = dataSet.map(o => {
     return function () {
@@ -157,8 +156,8 @@ function createTestRun () {
         .then(() => {
           return calcEntitlement(o)
         })
-        .then(enObj => {
-          createTxMaterial(o, app.rootnode.tenantId, o.customer.uuid, enObj)
+        .then(entObj => {
+          createTxMaterial(app.rootnode.tenantId, o.customer.uuid, entObj)
         })
         .catch(err => console.error(err))
     }
@@ -166,7 +165,6 @@ function createTestRun () {
 
   serialPromise(arr).then(console.log.bind(console))
 }
-
 /* Functions */
 
 function getCurrentReading (o) {
@@ -238,6 +236,7 @@ function calcEntitlement (o) {
   const energy = {}
   const period = {}
   const entitlement = {}
+
   /* caltulate total energy */
 
   energy.metered = {}
@@ -262,6 +261,7 @@ function calcEntitlement (o) {
           86400000 *
           (o.consumptionEstimate.value / o.invoicingPeriod.value)
     ) // days * (wh/day)
+
   console.info(
     'metered energy: ',
     Math.round(energy.metered.value / energy.metered.multiplier),
@@ -377,7 +377,7 @@ function calcEntitlement (o) {
 /**
  * function createTxMaterial
  */
-function createTxMaterial (o, tenantId, customerId, entitlementObj) {
+function createTxMaterial (tenantId, customerId, entitlementObj) {
   let txLedgerAddress = ''
   let txPeriod = {}
   let txEnergy = {}
@@ -412,7 +412,7 @@ function createTxMaterial (o, tenantId, customerId, entitlementObj) {
         console.log(namespace('entitlement', tenantId, true))
         return fetchTxAddress(
           node,
-          namespace('entitlement', tenantId, true)
+          namespace('entitlement', tenantId)
         ).then(toAddress => {
           txPeriod.toAddress = toAddress
           txEnergy.toAddress = toAddress
@@ -502,6 +502,9 @@ function fetchTxAddress (n, namespacedStrg, createNew) {
     ) {
       // let cNode = new fury.Node({ external_id: namespacedStrg, testMode: true })
       let cNode = ethers.Wallet.createRandom()
+      // let cNode = createNodeKeys(namespacedStrg, fury)
+      console.log('node address:', node.wallet.address)
+      console.log('cNode: ', cNode)
       return setRelation(
         n,
         hash(namespacedStrg),
@@ -516,6 +519,18 @@ function fetchTxAddress (n, namespacedStrg, createNew) {
       return address
     }
   })
+}
+
+function createNodeKeys (extid, f) {
+  let cn = new f.Node({
+    external_id: extid,
+    testMode: true
+  })
+  return {
+    extid: extid,
+    address: cn.wallet.address,
+    privateKey: cn.wallet.privateKey
+  }
 }
 
 /**
