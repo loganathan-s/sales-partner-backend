@@ -16,6 +16,7 @@ const request = require('request-promise')
 const app = {
   appid: 'spapptest',
   apiHost: 'http://fury.network/api',
+  rpcHost: 'https://demo.stromdao.de/rpc=',
   rootnode: {
     tenantId: 'sevtest',
     username: 'root',
@@ -23,7 +24,6 @@ const app = {
     address: '0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E',
     privateKey:
       '0xf1e07118a448dcef563626da98ef98b37f66a7d84d6c1176242556d350ca1b70',
-    rootnode: '0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E',
     provider: null,
     ledger: {
       tenantId: 'sevtest',
@@ -122,6 +122,26 @@ const app = {
   data: []
 }
 
+/*
+  rakete ('0xB6382fDb7b042b6EFf2B6786427850B21150481A')
+  setting role 42  of  0xB6382fDb7b042b6EFf2B6786427850B21150481A  to  0xE5c42357F76575D479B3b8C4e6B77Eb942A21c4b
+  setting role 85873873117 ('rootnode::address') of  0xB6382fDb7b042b6EFf2B6786427850B21150481A  to  0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+  stringStore relation at role 15216300368 ('tenantId') string:  raketenstrom
+  stringStore relation at role 20550071718 ('provider::tenantId') string:  sevtest
+  setting role 94397483417 ('provider::address')  of  0xB6382fDb7b042b6EFf2B6786427850B21150481A  to  0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+  setting role 85647153723 ('provider::ledgerAddress')  of  0xB6382fDb7b042b6EFf2B6786427850B21150481A  to  0x691C0173bbAF9B8e8293D6d6b145bbb775B1A84e
+*/
+
+/*
+  demouser ('0x5B4a39ebB3D0d86048724fCb1b4b5051DacE9B09')
+  setting role 42  of  0x5B4a39ebB3D0d86048724fCb1b4b5051DacE9B09  to  0xE48A7F1400b6bd69e6Cb49E388b9bfA1e2346275
+  setting role 85873873117 ('rootnode::address')  of  0x5B4a39ebB3D0d86048724fCb1b4b5051DacE9B09  to  0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+  stringStore relation at role 15216300368 ('tenantId') string:  demo
+  stringStore relation at role 20550071718 ('provider::tenantId') string:  sevtest
+  setting role 94397483417 ('provider::address')  of  0x5B4a39ebB3D0d86048724fCb1b4b5051DacE9B09  to  0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+  setting role 85647153723 ('provider::ledgerAddress')  of  0x5B4a39ebB3D0d86048724fCb1b4b5051DacE9B09  to  0x691C0173bbAF9B8e8293D6d6b145bbb775B1A84e
+*/
+
 /* allways instantiate rootnode */
 
 const node = new fury.Node({
@@ -157,9 +177,9 @@ if (!app.rootnode.ledger.address) {
 
 /* bootstrap seed tenants */
 
-if (app.tenants.length !== 0) {
+if (app.tenants.length === 0) {
+  // { tenantId: 'sevtest', username: 'jochentest', password:'test' },
   let seedTenants = [
-    // { tenantId: 'sevtest', username: 'jochentest', password:'test' },
     { tenantId: 'raketenstrom', username: 'rakete', password: 'start' },
     { tenantId: 'demo', username: 'demouser', password: 'demosecret' }
   ]
@@ -169,50 +189,25 @@ if (app.tenants.length !== 0) {
       return createTenantAccount(item.tenantId, item.username, item.password)
     }
   })
-  // console.log(arr)
+
   serialPromise(arr)
     .then(console.log.bind(console))
     .catch(err => console.error(err))
 }
 
-function createTenantAccount (tenantId, username, password) {
-  let tenant = {}
-  tenant.tenantId = tenantId
-  tenant.username = username
-  tenant.password = password
+/* seed tennant accounts relational setup */
 
-  let tAccount = new fury.Account(username, password)
-  return tAccount
-    .wallet()
-    .then(wallet => {
-      console.info('creating tenant: ', username)
-      tenant.address = wallet.address
-      tenant.privateKey = wallet.privateKey
+let something = true
+if (app.tenants.length !== 0 && something) {
+  let tArr = app.tenants.map(itm => {
+    return function () {
+      console.info('---- ', itm.username, '--------')
+      return createTenantRelations(itm.tenantId, itm.privateKey)
+    }
+  })
 
-      console.info(tenant)
-      return tenant
-    })
-    .catch(err => console.error(err))
-}
-
-function setTenantRelations (tenantNode, tenantObj, providerObj) {
-  let n = tenantNode
-  let rootnodeAddress = app.rootnode.address
-  let tenant = tenantObj
-  let provider = providerObj || {
-    tenantId: app.rootnode.tenantId,
-    address: app.rootnode.address,
-    ledger: app.rootnode.ledger.address
-  }
-
-  return Promise.all([
-    setRelation(n, hash('rootnode::address'), rootnodeAddress),
-    setRelation(n, hash('provider::address'), provider.address)
-    // setRelation(n, hash('provider::ledger'), provider.ledger),
-    // setStringStoreRelation(n, hash('provider::tenantId'), tenant.tenantId)
-    // setStringStoreRelation(n, hash('myTennantId'), provider.tenantId)
-  ])
-    .then(() => {})
+  serialPromise(tArr)
+    .then(console.log.bind(console))
     .catch(err => console.error(err))
 }
 
@@ -227,60 +222,18 @@ if (app.rootnode.ledger.address && app.rootnode.ledger.accounts.length === 0) {
     })
 }
 
-/* bootstrap seed user accounts */
-
-if (app.rootnode.ledger.address && app.users.length === 0) {
-  // serialPromise(bootstrpSeedUsers(node))
-  //   .then(console.log.bind(console))
-  //   .then(() => {
-  //     console.log('app.users')
-  //     console.log(app.users)
-  //   })
-}
-
+/* setup admin user */
 /**
- * function createLedger
+ * add user To ledger
  *
- *  creates ledger with node, adds ledger address to role 42
+ * this will be used to create additional user nodes under the same tennent id
+ * these nodes will use the same ledger.
+ *
+ * 1)
  *
  */
 
-function createLedger (n, overwriteExisting) {
-  console.info('creating new rootledger via rootnode')
-  let ledger = {}
-  return getRelation(n.wallet.address, 42)
-    .then(lookedupAddress => {
-      if (
-        lookedupAddress !== '0x0000000000000000000000000000000000000000' &&
-        !overwriteExisting
-      ) {
-        console.warn('ledger @ role 42 already exists: ', lookedupAddress)
-        console.info(
-          'Overwrite existing ===',
-          overwriteExisting,
-          ' => No new ledger created'
-        )
-        return lookedupAddress
-      } else {
-        return buildLedger(n)
-      }
-    })
-    .then(ledgerAddress => {
-      ledger.address = ledgerAddress
-      return overwriteExisting ? setRelation(n, 42, ledgerAddress) : ''
-    })
-    .then(() => {
-      console.info('Success! Ledger address: ', ledger.address)
-      console.info(
-        'Ledger ddress available via role lookup in register 42 of address',
-        n.wallet.address,
-        ').'
-      )
-    })
-    .catch(err => console.error(err))
-}
-
-/* setup admin user */
+// function addRootledgerUsers (n, users) {
 function addRootledgerUsers (n, users) {
   return users.map(user => {
     return function () {
@@ -444,7 +397,7 @@ function bootstrpSeedLedgers (users, overwriteExisting) {
           )
           return lookedupAddress
         } else {
-          return buildLedger(uNode)
+          return createLedger(uNode, overwriteExisting)
         }
       })
       .then(ledgerAddress => {
@@ -500,6 +453,170 @@ function bootstrpSeedLedgers (users, overwriteExisting) {
   })
 }
 
+/* bootstrap functions */
+
+/**
+ * function createLedger
+ *
+ *  creates ledger with node, adds ledger address to role 42
+ *
+ */
+function createLedger (n, overwriteExisting) {
+  console.info('creating ledger for ', n.wallet.address)
+  // return buildLedger(n) // => redundant
+  return n
+    .stromkontoproxyfactory()
+    .then(skpf => {
+      return skpf.build()
+    })
+    .then(ledgerAddress => {
+      return setRelation(n, 42, ledgerAddress, overwriteExisting)
+    })
+    .catch(err => console.error(err))
+}
+
+/**
+ * function createLedger
+ *
+ *  is redundant because createLedger does the same
+ *
+ */
+function buildLedger (n) {
+  return n
+    .stromkontoproxyfactory()
+    .then(skpf => {
+      return skpf.build()
+    })
+    .catch(err => console.error(err))
+}
+
+/**
+ * function createTenantAccount
+ *
+ *  creates creates a tenant node with user name and password
+ *
+ */
+function createTenantAccount (tenantId, username, password) {
+  let tenant = {}
+  tenant.tenantId = tenantId
+  tenant.username = username
+  tenant.password = password
+
+  let tAccount = new fury.Account(username, password)
+  console.info('creating tenant: ', username)
+  return tAccount
+    .wallet()
+    .then(wallet => {
+      tenant.address = wallet.address
+      tenant.privateKey = wallet.privateKey
+      console.info(tenant)
+    })
+    .catch(err => console.error(err))
+}
+
+/**
+ * function createTenantRelations
+ *
+ * builds tenant node from private key
+ * builds tenant ledger for tenant node at role 42
+ * stringstores tennantId
+ * string stores povider id
+ * sets provider node relation
+ * sets provider ledger relation
+ *
+ */
+function createTenantRelations (tenantId, privateKey) {
+  let tNode = new fury.Node({ privateKey: privateKey, testMode: true })
+  return createLedger(tNode, true)
+    .then(() => {
+      return setMyRootnodeAddress(tNode, app.rootnode.address)
+    })
+    .then(() => {
+      return setMyTenantId(tNode, tenantId)
+    })
+    .then(() => {
+      return setMyProviderId(tNode, app.rootnode.tenantId)
+    })
+    .then(() => {
+      return setMyProviderAddress(tNode, app.rootnode.address)
+    })
+    .then(() => {
+      return setMyProviderLedgerAddress(tNode, app.rootnode.address)
+    })
+    .catch(err => console.error(err))
+}
+
+/**
+ * function setMyRootnodeAddress
+ *
+ * sets rootnode address in the rolelookup of a given node
+ *
+ */
+function setMyRootnodeAddress (n, rootnodeAddress) {
+  console.info('setMyRootnodeAddress')
+  let theRootnodeAddress = rootnodeAddress || app.rootnode.address // required hard coded in app
+  return setRelation(n, hash('rootnode::address'), theRootnodeAddress, true)
+}
+
+/**
+ * function setMyTenantId
+ *
+ * string stores the tennantId with the rolelookup for a given node
+ *
+ */
+function setMyTenantId (n, myTenantId) {
+  console.info('setMyTenantId')
+  let tenantId = myTenantId // required as prop at signup
+  return writeRelationString(n, hash('tenantId'), tenantId)
+}
+
+/**
+ * function setMyProviderId
+ *
+ * string stores the tennantId ofthe provider with the rolelookup for a given
+ * node
+ *
+ */
+function setMyProviderId (n, myProviderId) {
+  console.info('setMyProviderId')
+  let providerTenantId = myProviderId // required as prop at signup
+  return writeRelationString(n, hash('provider::tenantId'), providerTenantId)
+}
+
+/**
+ * function setMyRootnodeAddress
+ *
+ * sets provider node address in the rolelookup of a given node
+ * will be the address of the node that issued the invitation link
+ *
+ */
+function setMyProviderAddress (n, providerAddress) {
+  console.info('setMyProviderAddress')
+  let myProviderAddress = providerAddress // required as prop at signup
+  return setRelation(n, hash('provider::address'), myProviderAddress, true)
+}
+
+/**
+ * function setMyProviderLedgerAddress
+ *
+ * sets provider ledger address in the rolelookup of a given node
+ * (this is optional might not be required)
+ *
+ */
+function setMyProviderLedgerAddress (n, providerAddress) {
+  console.info('setMyProviderLedgerAddress')
+  return getRelation(providerAddress, 42, n)
+    .then(providerLedgerAddress => {
+      return setRelation(
+        n,
+        hash('provider::ledgerAddress'),
+        providerLedgerAddress,
+        true
+      )
+    })
+    .catch(err => console.error(err))
+}
+
 /* Actions */
 
 function registerAccount (node, obj) {
@@ -550,15 +667,6 @@ function checkAccounts (s) {
   })
 }
 
-function buildLedger (n) {
-  return n
-    .stromkontoproxyfactory()
-    .then(skpf => {
-      return skpf.build()
-    })
-    .catch(err => console.error(err, 'something is wrong'))
-}
-
 function getRelation (address, key, n) {
   // (0x0000, 93401849032184, => 0x000
   if (!n) n = node
@@ -582,11 +690,11 @@ function getRelation (address, key, n) {
 }
 
 function setRelation (n, key, toAddress, overwriteExisting) {
-  overwrite = !!(overwriteExisting && overwriteExisting !== false)
+  let overwrite = overwriteExisting === true
   return n
     .roleLookup()
     .then(rl => {
-      return rl.getRelation(n.wallet.address, key)
+      return rl.relations(n.wallet.address, key)
     })
     .then(lookedupAddress => {
       if (lookedupAddress !== '0x0000000000000000000000000000000000000000') {
@@ -606,15 +714,30 @@ function setRelation (n, key, toAddress, overwriteExisting) {
         ' to ',
         overwrite ? toAddress : lookedupAddress
       )
-      return overwriteExisting
-        ? rl.setRelation(key, toAddress)
-        : lookedupAddress
+      if (overwrite === true) {
+        return n.roleLookup().then(rl => {
+          return rl.setRelation(key, toAddress)
+        })
+      } else {
+        return lookedupAddress
+      }
     })
     .catch(err => console.error(err))
 }
 
-function setStringStoreRelation (n, key, string) {
-  n.stringstoragefactory().then(ssf => {
+function readRelationString (address, key, n) {
+  if (!n) n = node
+  return getRelation(address, key, n)
+    .then(strgStoreAddress => {
+      return n.stringstrorage(strgStoreAddress)
+    })
+    .then(strgStore => {
+      return strgStore.str()
+    })
+}
+
+function writeRelationString (n, key, string) {
+  return n.stringstoragefactory().then(ssf => {
     console.log('stringStore relation at role', key, 'string: ', string)
     return ssf.buildAndAssign(key, string)
   })
@@ -659,12 +782,11 @@ function fetchRemoteNodeAddress (extid, secret) {
   })
 }
 
-function appendYear (str) {
-  return str === 'billing' || str === 'entitlement'
-}
-
 /**
- * serialPromise executes Promises sequentially.
+ * function serialPromise
+ *
+ * executes Promises sequentially.
+ *
  * @param {funcs} An array of functions (funcs) that each return promises.
  * @example
  * const urls = ['/url1', '/url2', '/url3']
