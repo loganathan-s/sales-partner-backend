@@ -253,4 +253,81 @@ let entitlement = {
 [TODO: document how submit entitlement transactions into the blockchain]
 [TODO: document how createTxMaterial() fn works]
 
-[TODO] app bootstraping
+## App Bootstrapping
+
+Setting up the sales partner applicaitin involves some initial bootstrapping of the rootnode.
+
+### Rootnode credentials and key
+
+Initially a private key needs to be created for the rootnode. The Business Object provides a convinient method to do so with a `username` and `password`
+
+```js
+const fury = require('stromdao-businessobject')
+
+let rootnodePrivateKey = undefined
+
+const rootnodeAccount = new fury.Account('your username', 'and password')
+
+rootAccount.wallet()
+  .then(w => {
+    rootnodePrivateKey = w.privateKey
+  })
+```
+
+Then initialize the rootnode with the private Key derived from the `fury.Account` method:
+
+```js
+const rootnode = new fury.Node({
+  external_id: 'whatever',
+  privateKey: rootnodePrivateKey
+  rpc: 'https://fury.network/rpc',
+  abilocation: 'https://unpkg.com/stromdao-businessobject/smart_contracts/',
+  testMode: true
+})
+```
+Note: Do not ever share your private key or credentials. Write it down and store it somewhere save.
+
+During runtime the rootnode address and key are available by evoking the apprpiate properties on the `wallet` object of the rootnode instance. Check it out:
+
+```js
+/* derive the rootnode address and key */
+let myRootnodeAddress = rootnode.wallet.address
+let myRootnodePrivateKey = rootnode.wallet.privateKey
+
+/* test it */
+console.assert(myRootnodePrivateKey === rootnodePrivateKey)
+```
+The `rootnode.wallet.address` of the test app should equal `'0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E'`
+
+
+### Root ledger
+
+The rootnode requires a blockchain based bookkeeping ledger to keep track of commission entitlements, claims and settlements etc.
+
+The rootnode instance can be utilized to create this ledger:
+
+```js
+const rootLedgerAddress = rootnode.stromkontoproxyfactory()
+  .then(skpf => {
+    return skpf.build()
+  })
+```
+Once the ledger was established, its public address should be stored in a place where it can be easily discoverd by diffrent sales partners. Utilizing the roleLookup method of the rootnode instance is the recommended way to do that:
+
+```js
+rootnode.roleLookup()
+  .then(rl => {
+    return rl.setRelation(42, rootLedgerAddress)
+  })
+```
+Note: The integer `42` is utilizes as the roleLookup register under which to store the ledger address. This is a general convention: a discoverable node ledger should be made available via `roleLookup` register `42` and nowhere else.
+
+Ledger retrieval for a given node (e. g. the rootnode) can be achieved by evoking the appropiate `roleLookup` method:
+
+```js
+anynode.roleLookup()
+  .then(rl => {
+    return rl.relations(rootnode.wallet.address, 42)
+  })
+```
+[Work in progress: there is more on app bootstraping]
