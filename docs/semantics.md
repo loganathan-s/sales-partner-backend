@@ -320,14 +320,90 @@ rootnode.roleLookup()
     return rl.setRelation(42, rootLedgerAddress)
   })
 ```
-Note: The integer `42` is utilizes as the roleLookup register under which to store the ledger address. This is a general convention: a discoverable node ledger should be made available via `roleLookup` register `42` and nowhere else.
+Note: The integer `42` is utilized as the roleLookup register number, under which the ledger address is stored. This is a general convention: a discoverable node ledger should be made available via `roleLookup` register `42` and nowhere else.
 
-Ledger retrieval for a given node (e. g. the rootnode) can be achieved by evoking the appropiate `roleLookup` method:
+Ledger retrieval for a given node address (e. g. the rootnode) can be achieved by evoking the  `roleLookup.ralations()` method from any other node connected to the Fury network:
 
 ```js
-anynode.roleLookup()
+const fury = require('stromdao-businessobject')
+
+const anyothernode = new fury.Node({ ... })
+
+/*  retrieve the rootnode ledger via roleLookup on register 42 of the rootnode address */
+anyothernode.roleLookup()
   .then(rl => {
-    return rl.relations(rootnode.wallet.address, 42)
+    return rl.relations('0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E', 42)
   })
 ```
-[Work in progress: there is more on app bootstraping]
+
+The route ledger setup routine is also available via a convinience method `createLedger()` that requires a Fury node instance as the first argument.
+```js
+/*
+  creates a rootnode ledger and references it 
+  at the roleLookup register number 42 
+*/
+createLedger(rootnode, true)
+
+
+```
+Likewise there is a convinience method for retriving roleLookup relations:
+
+```js
+/* retrive the rootnode ledger with anothter node */
+getRelation('0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E', 42, anyothernode)
+```
+`getRelation()` requires the address to look up as its first argument. The roleLookup register number is required as the second argument. Optionally, the function also accepts as a thrird argument a Fury node instance to make the actual `roleLookup.relations()` method call.
+
+The root ledger address of the test app should equal `'0x691C0173bbAF9B8e8293D6d6b145bbb775B1A84e'`
+
+#### rootnode `tenantId`
+
+Each actor (or node) using the sales partner application needs to be accociated with a `tenantId`. The `tenantId` is used to distinguish diffrent organisation that utilize the application and to help organize their relationships with each other, if applicable. 
+
+Hence a `tenantId` is crucially required for the rootnode, as it is required for all individual sales partner nodes.
+
+Serverside a unique `tenantId` can be generated using the `crypto` module:
+
+```js
+const crypto = require('crypto');
+
+/* create a random string, e. g. 'b9a831' */
+rootTenantId = crypto.randomBytes(3).toString('hex')
+```
+
+`TenantId`s are meant to be shared between individual users or nodes within a organisation and also between diffrent organisations where appropiate:  E. g. between a provider and a sales partner.
+
+Hence it is recomended to store a node's tenantId in a place where it can be discoverd by thrid parties. The `roleLookup()` in combination with the `stringStorage()` is the recomended method to achieve this:
+
+```js
+/* store a string and make it discoverable via roleLookup */
+rootnode.stringstoragefactory()
+  .then(ssf => {
+    return ssf.buildAndAssign(15216300368, rootTenantId)
+  })
+```
+Retrieval of the stored string can be achieved in two steps:
+1) calling `roleLookup` in register `15216300368` at the rootnode address
+2) calling `stringStorage` with the looked up address as the argument.
+
+```js
+/* 
+  retrive stored string reference on the rootnode address at roleLookup register 15216300368
+*/
+readRelationString('0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E', 15216300368, anyothernode)
+  .then(strg => {
+    console.assert(strg === rootTenantId, 'string should equal tenantId of rootnode.')
+  })
+```
+Please note that: 
+ -  there can only be one `tenantId` per organisation.
+ -  there can be multiple users or nodes per organisation
+ -  all org users should reference the org tenantId at roleLookup register `15216300368`
+
+_**Protip**_: Use the `hash()` convinience funtion to ease the management of register numbers:
+
+```js
+console.assert(hash('tenantId') === 15216300368)
+```
+
+[Work in progress: there is still more to come]
