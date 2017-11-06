@@ -8,72 +8,73 @@ test('calcEntitlement', t => {
       uuid: 'rakentenstom',
       rate: {
         energy: {
-          value: 3,
-          multiplier: 1000,
-          unit: 'cent per watthour)'
+          value: 300,
+          multiplier: 100000,
+          unit: 'eurocent',
+          unitDivisor: 'per watthour'
         },
         basicFee: {
-          value: Math.round(730 * 1000 / 365),
-          multiplier: 1000,
-          unit: 'eurocent per day'
+          value: 200000,
+          multiplier: 100000,
+          unit: 'eurocent',
+          unitDivisor: 'per day'
         }
       }
     },
-    customer: {
-      uuid: '30091981'
-    },
+    customer: { uuid: '30091981' },
     orderNumber: '10005277',
-    contractAccount: {
-      uuid: '20050466',
-      type: 'Strom'
-    },
-    contract: {
-      uuid: '5000161171'
-    },
-    meterpoint: {
-      number: '60668720',
-      address: '0xEAA8789b2f942d66A880731ffFD24f56E87Cf809' // Stefan's meter, TODO: Meter number etc.
-    },
-    startDate: new Date('2017-08-25T12:27:22'),
+    contractAccount: { uuid: '20050466', type: 'Strom' },
+    contract: { uuid: '5000161171' },
+    meterpoint: { number: '60668720' },
+    startDate: '2016-08-29T00:00:01.000Z',
     startReading: {
-      time: new Date('2017-08-25T12:27:22').getTime(),
-      value: Math.round(4153906 / 10), // 415.3906000 Wh
+      time: 1503964801000,
+      value: 10526,
       unit: 'watthours',
-      multiplier: 10000 / 10
+      multiplier: 1
     },
-    endDate: undefined, // new Date('9999-12-31T23:59:59')
-    endReading: undefined,
-    invoicingPeriod: { value: 365, multiplier: 1, unit: 'days' }, // 365*86400000 ms
+    invoicingPeriod: { value: 365, multiplier: 1, unit: 'days' },
     consumptionEstimate: {
-      value: 1188 * 1000 * 1000,
-      multiplier: 1000,
-      unit: 'watthours'
+      value: 1480000,
+      multiplier: 1,
+      unit: 'watthours',
+      unitDivisor: 'per 365 days'
     },
     currentReading: {
-      time: 1509189314000,
-      value: 200386000,
+      time: 1506815998000,
+      value: 98057,
       unit: 'watthours',
-      multiplier: 1000
+      multiplier: 1
     }
   }
 
   sinon.stub(Date, 'now')
-  Date.now.returns(1509189487666)
+  Date.now.returns(1509984976429)
 
   const response = {
     energy: {
-      rate: { value: 3, multiplier: 1000, unit: 'cent per watthour)' },
-      base: { multiplier: 1000, unit: 'watthours', value: 199977151 },
-      multiplier: 1000000,
+      rate: {
+        value: 300,
+        multiplier: 100000,
+        unit: 'eurocent',
+        unitDivisor: 'per watthour'
+      },
+      base: { multiplier: 1, unit: 'watthours', value: 236253 },
+      multiplier: 100000,
       unit: 'eurocent',
-      value: 599931453
+      value: 70875900
     },
     period: {
-      rate: { value: 2000, multiplier: 1000, unit: 'eurocent per day' },
-      base: { multiplier: 1000, unit: 'days', value: 63000 },
-      multiplier: 1000000,
+      rate: {
+        value: 200000,
+        multiplier: 100000,
+        unit: 'eurocent',
+        unitDivisor: 'per day'
+      },
+      base: { multiplier: 1, unit: 'days', value: 68 },
+      multiplier: 100000,
       unit: 'eurocent',
-      value: 126000000
+      value: 13600000
     }
   }
 
