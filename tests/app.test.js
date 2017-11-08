@@ -25,10 +25,13 @@ test('calcEntitlement', t => {
     orderNumber: '10005277',
     contractAccount: { uuid: '20050466', type: 'Strom' },
     contract: { uuid: '5000161171' },
-    meterpoint: { number: '60668720' },
-    startDate: '2016-08-29T00:00:01.000Z',
+    startDate: '2016-10-08T06:10:16.000Z',
+    meterpoint: {
+      number: '60668720',
+      address: '0xEAA8789b2f942d66A880731ffFD24f56E87Cf809'
+    },
     startReading: {
-      time: 1503964801000,
+      time: 1503945001000,
       value: 10526,
       unit: 'watthours',
       multiplier: 1
@@ -41,7 +44,7 @@ test('calcEntitlement', t => {
       unitDivisor: 'per 365 days'
     },
     currentReading: {
-      time: 1506815998000,
+      time: 1506796198000,
       value: 98057,
       unit: 'watthours',
       multiplier: 1
@@ -49,7 +52,7 @@ test('calcEntitlement', t => {
   }
 
   sinon.stub(Date, 'now')
-  Date.now.returns(1509984976429)
+  Date.now.returns(1510156323539)
 
   const response = {
     energy: {
@@ -59,10 +62,10 @@ test('calcEntitlement', t => {
         unit: 'eurocent',
         unitDivisor: 'per watthour'
       },
-      base: { multiplier: 1, unit: 'watthours', value: 236253 },
+      base: { multiplier: 1, unit: 'watthours', value: 245223 },
       multiplier: 100000,
       unit: 'eurocent',
-      value: 70875900
+      value: 73566900
     },
     period: {
       rate: {
@@ -71,10 +74,10 @@ test('calcEntitlement', t => {
         unit: 'eurocent',
         unitDivisor: 'per day'
       },
-      base: { multiplier: 1, unit: 'days', value: 68 },
+      base: { multiplier: 1, unit: 'days', value: 71 },
       multiplier: 100000,
       unit: 'eurocent',
-      value: 13600000
+      value: 14200000
     }
   }
 
