@@ -28,16 +28,21 @@ var dataSet = [
       uuid: 'rakentenstom',
       rate: {
         energy: {
-          value: 3,
-          multiplier: 1000,
-          unit: 'cent per watthour)'
+          value: 300,
+          multiplier: 100000,
+          unit: 'eurocent',
+          unitDivisor: 'per watthour'
         },
         basicFee: {
+          // value: 730,
+          // multiplier: 1,
+          // unit: 'eurocent per year' // IMPORTANT: should allways be in 'eurocent' w/ multiplier = 100000
           value: Math.round(
-            730 * 1000 / getDaysInYear(new Date().getFullYear())
+            730 * 100000 / getDaysInYear(new Date().getFullYear())
           ),
-          multiplier: 1000,
-          unit: 'eurocent per day'
+          multiplier: 100000,
+          unit: 'eurocent', // IMPORTANT: should allways be in 'eurocent' w/ multiplier = 100000
+          unitDivisor: 'per day'
         }
       }
     },
@@ -52,30 +57,31 @@ var dataSet = [
     contract: {
       uuid: '5000161171'
     },
+    startDate: new Date(2016, 9, 8, 11, 40, 16), // new Date('2016-08-08T11:40:16'), // TODO: Cover Zählerwechselszenario: startDate !== startReading.time (relyOnMeterReading)
     meterpoint: {
       number: '60668720',
       address: '0xEAA8789b2f942d66A880731ffFD24f56E87Cf809' // Stefan's meter, TODO: Meter number etc.
     },
-    startDate: new Date('2017-08-25T12:27:22'),
     startReading: {
-      time: new Date('2017-08-25T12:27:22').getTime(),
-      value: Math.round(4153906 / 10), // 415.3906000 Wh
-      unit: 'watthours',
-      multiplier: 10000 / 10
+      time: new Date(2017, 7, 29, 0, 0, 1).getTime(), // '2017-08-29T00:00:01'
+      value: Math.floor(10526.411), // Math.round(10526,411),      //  10526,4110000 Wh
+      unit: 'watthours', // IMPORTANT: should allways be in 'watthours' w/ multiplier = 1
+      multiplier: 1
     },
     endDate: undefined, // new Date('9999-12-31T23:59:59')
     endReading: undefined,
-    invoicingPeriod: { value: 365, multiplier: 1, unit: 'days' }, // 365*86400000 ms
+    invoicingPeriod: { value: 365, multiplier: 1, unit: 'days' }, // (365*86400000 ms) IMPORTANT: should allways be in 'days' w/ multiplier = 1
     consumptionEstimate: {
-      value: 1188 * 1000 * 1000,
-      multiplier: 1000,
-      unit: 'watthours'
-    },
+      value: 1480 * 1000,
+      multiplier: 1,
+      unit: 'watthours',
+      unitDivisor: 'per 365 days'
+    }, // IMPORTANT: should allways be in 'watthours' w/ multiplier = 1
     currentReading: {
-      time: undefined,
-      value: undefined,
-      unit: undefined,
-      multiplier: undefined
+      time: new Date(2017, 8, 30, 23, 59, 58).getTime(),
+      value: Math.floor(98057.021),
+      unit: 'watthours', //  IMPORTANT: should allways be in 'watthours' w/ multiplier = 1
+      multiplier: 1
     }
   }
   // {
@@ -129,17 +135,35 @@ var dataSet = [
   // }
 ]
 
+/*
+  1. iterate through dataSet
+  2. instanciate appropiate counterNodes on each contract record
+  3. alllow nodes to write into root ledger
+  4. reference sales partner entitlement account address in counterNode role lookup
+  5. calc entitlements for record at hand
+  6 look up current counter reading.
+  7 create txMaterial
+  8. make tx from counterNode => tenantId::entitlement account on root ledger
+  9. if Tx went through, dial up the counter to new value, rinse reapeat
+  Note one entitlement counter node for retention and one for energy per contract account record.
+*/
+
 /* intitalise rootnode */
 
-const node = new fury.Node({
-  external_id: 'sevtest::rootnode', // 0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
-  // privateKey: app.rootnode.privateKey || undefined,
-  testMode: true
-})
+// const node = new fury.Node({
+//   external_id: 'sevtest::rootnode', // 0x43D9F5a7E0BCFd49c2B7078b9e39b17C0BA46F4E
+//   privateKey: app.rootnode.privateKey || undefined,
+//   testMode: true
+// })
+
+const node = () => createNode('sevtest::rootnode', app.rootnode.privateKey)
+
 console.log('---- rootnode -----')
-console.log(node.wallet.address)
+console.log(node().wallet.address)
 console.log('---- rootnode -----')
+
 function createTestRun () {
+  /* read meter => calc entitlement => createTxMaterial */
   let arr = dataSet.map(o => {
     return function () {
       return getCurrentReading(o)
@@ -147,31 +171,117 @@ function createTestRun () {
           o.currentReading.time = o.meterpoint.address
             ? reading.time.toNumber() * 1000
             : reading.time // turn time from seconds to milliseconds
+          // Note: if reading comes from blockchain reading.power needs to by divided
+          // by 1000 to arrive at the Wh value.
           o.currentReading.value = o.meterpoint.address
-            ? reading.power.toNumber()
+            ? Math.round(reading.power.toNumber() / 1000)
             : reading.value
-          o.currentReading.multiplier = reading.multiplier || 1000
+          o.currentReading.multiplier = reading.multiplier || 1
           o.currentReading.unit = reading.unit || 'watthours'
+          console.log(o.startReading)
+          console.log(o.currentReading)
         })
         .then(() => {
           return calcEntitlement(o)
         })
         .then(entObj => {
-          createTxMaterial(app.rootnode.tenantId, o.customer.uuid, entObj)
+          return createTxMaterial(
+            o.salesPartner.uuid,
+            o.meterpoint.number,
+            entObj
+          )
+        })
+        .then(txMaterial => {
+          console.log('------THE TX MATERIAL-------')
+          console.log(txMaterial)
+          return Promise.all(
+            txMaterial.map(tx => {
+              // TODO: Turn this into extrnal function `submitEntitlement(tx)` that that we can call `Promise.all(txMaterial.map(submitEntitlement(tx))`
+              if (tx.value > 100000) {
+                return getRelation(tx.fromAddress, 42)
+                  .then(txLedger => {
+                    return txLedger ===
+                      '0x0000000000000000000000000000000000000000'
+                      ? new Error(
+                        'no leger reference in roleLookup register 42 of sending node ',
+                        tx.fromAddress
+                      )
+                      : addTx(
+                        tx.___senderNode(),
+                        txLedger,
+                        tx.fromAddress,
+                        tx.toAddress,
+                        tx.value,
+                        tx.base.value
+                      )
+                        .then(() => {
+                          return fetchMeterpointReading(tx.fromAddress)
+                        })
+                        .then(calcAccountReading => {
+                          return storeMeterpointReading(
+                            tx.___senderNode(),
+                            calcAccountReading.power.toNumber() +
+                                tx.base.value
+                          )
+                        })
+                  })
+                  .catch(err => console.error(err))
+              }
+
+              if (tx.value < -100000 && tx.base.value < 0) {
+                // return 'energy skiped' }
+                return getRelation(tx.fromAddress, 42)
+                  .then(txLedger => {
+                    return txLedger ===
+                      '0x0000000000000000000000000000000000000000'
+                      ? new Error(
+                        'no leger reference in roleLookup register 42 of sending node ',
+                        tx.fromAddress
+                      )
+                      : // if tx.value is regative we reverse the tx flow and book from entitlementAccount to calcAccount
+                      addTx(
+                        tx.___senderNode(),
+                        txLedger,
+                        tx.toAddress,
+                        tx.fromAddress,
+                        Math.abs(tx.value),
+                        Math.abs(tx.base.value)
+                      )
+                        .then(() => {
+                          return fetchMeterpointReading(tx.fromAddress)
+                        })
+                        .then(calcAccountReading => {
+                          return storeMeterpointReading(
+                            tx.___senderNode(),
+                            calcAccountReading.power.toNumber() +
+                                tx.base.value
+                          )
+                        })
+                  })
+                  .catch(err => console.error(err))
+              }
+              return 'Skipped tx: tx.value too low'
+            })
+          )
         })
         .catch(err => console.error(err))
     }
   })
 
   serialPromise(arr).then(console.log.bind(console))
+
+  // var buf = crypto.randomBytes(4).toString('hex')
+  // console.info('buf')
+  // console.log(buf)
+  // console.log(buf.toString('hex'))
 }
 /* Functions */
 
 function getCurrentReading (o) {
   if (o.meterpoint.address) {
-    return fetchMeterpointReading(o.meterpoint.address, node)
+    return fetchMeterpointReading(o.meterpoint.address)
       .then(reading => {
-        console.info('new reading from ', o.meterpoint.address, ': ', reading)
+        console.info('new reading from ', o.meterpoint.address)
         return reading
       })
       .catch(err => console.error('getCurrentReading: ', err))
@@ -196,9 +306,15 @@ function getCurrentReading (o) {
  * function fetchMeterPointReading
  */
 function fetchMeterpointReading (meterpointAddress, n) {
-  if (!n) n = node
+  if (!n) n = node()
   return n.mpr().then(mpr => {
     return mpr.readings(meterpointAddress)
+  })
+}
+
+function storeMeterpointReading (n, uint256) {
+  return n.mpr().then(mpr => {
+    return mpr.storeReading(uint256)
   })
 }
 
@@ -206,7 +322,7 @@ function fetchMeterpointReading (meterpointAddress, n) {
  * function fetchAccountHaben
  */
 function fetchAccountHaben (ledgerAddress, accountAddress, n) {
-  if (!n) n = node
+  if (!n) n = node()
   return n.stromkonto(ledgerAddress).then(ledger => {
     return ledger.balancesHaben(accountAddress)
   })
@@ -216,9 +332,18 @@ function fetchAccountHaben (ledgerAddress, accountAddress, n) {
  * function fetchAccountSoll
  */
 function fetchAccountSoll (ledgerAddress, accountAddress, n) {
-  if (!n) n = node
+  if (!n) n = node()
   return n.stromkonto(ledgerAddress).then(ledger => {
     return ledger.balancesSoll(accountAddress)
+  })
+}
+
+/**
+ * function addTx
+ */
+function addTx (n, ledgerAddress, fromAccount, toAccount, txValue, txBase) {
+  return n.stromkonto(ledgerAddress).then(sko => {
+    return sko.addTx(fromAccount, toAccount, txValue, txBase)
   })
 }
 
@@ -232,7 +357,7 @@ function calcEntitlement (o) {
     )
   }
 
-  const timeNow = Date.now()
+  const timeNow = () => Date.now()
   const energy = {}
   const period = {}
   const entitlement = {}
@@ -246,22 +371,28 @@ function calcEntitlement (o) {
     ? o.currentReading.value - o.startReading.value
     : 0
 
-  energy.inAdvance = {}
-  energy.inAdvance.multiplier =
+  energy.anticipated = {}
+  energy.anticipated.multiplier =
     o.consumptionEstimate.multiplier / o.invoicingPeriod.multiplier
-  energy.inAdvance.unit = o.consumptionEstimate.unit
-  energy.inAdvance.value = o.currentReading.value
+  energy.anticipated.unit = o.consumptionEstimate.unit
+  energy.anticipated.value = o.currentReading.value
     ? Math.round(
-      (timeNow - o.currentReading.time) /
+      (timeNow() - o.currentReading.time) /
           86400000 *
           (o.consumptionEstimate.value / o.invoicingPeriod.value)
     ) // days * (wh/day)
     : Math.round(
-      (timeNow - o.startDate.getTime()) /
+      (timeNow() - o.startReading.time) /
           86400000 *
           (o.consumptionEstimate.value / o.invoicingPeriod.value)
     ) // days * (wh/day)
 
+  console.assert(
+    o.currentReading.value
+      ? o.currentReading.value - o.startReading.value
+      : energy.metered.value === 0,
+    'reading check'
+  )
   console.info(
     'metered energy: ',
     Math.round(energy.metered.value / energy.metered.multiplier),
@@ -270,34 +401,38 @@ function calcEntitlement (o) {
   )
   console.info(
     'anticipated energy: ',
-    Math.round(energy.inAdvance.value / energy.inAdvance.multiplier),
+    Math.round(energy.anticipated.value / energy.anticipated.multiplier),
     ' ',
-    energy.inAdvance.unit
+    energy.anticipated.unit
   )
   console.info(
     'sum: ',
     Math.round(
-      (energy.metered.value + energy.inAdvance.value) /
-        energy.inAdvance.multiplier
+      (energy.metered.value + energy.anticipated.value) /
+        energy.anticipated.multiplier
     )
   )
 
+  /* calc total period */
   period.metered = {}
-  period.metered.multiplier = 1000
+  period.metered.multiplier = 1 // o.startReading.multiplier === o.current.Reading.multiplier ?
   period.metered.unit = 'days'
   period.metered.value = o.currentReading.time
-    ? Math.floor((o.currentReading.time - o.startDate.getTime()) / 86400000) *
+    ? (o.currentReading.time - o.startReading.time) /
+      86400000 *
       period.metered.multiplier // millisec to days rounded down * 1000
     : 0
 
-  period.inAdvance = {}
-  period.inAdvance.multiplier = 1000
-  period.inAdvance.unit = 'days'
-  period.inAdvance.value = o.currentReading.time
-    ? Math.floor((timeNow - o.currentReading.time) / 86400000) *
-      period.inAdvance.multiplier // millisec to days rounded down * 1000
-    : Math.floor((timeNow - o.startDate.getTime()) / 86400000) *
-      period.inAdvance.multiplier
+  period.anticipated = {}
+  period.anticipated.multiplier = 1 // o.invoicingPeriod.multiplier
+  period.anticipated.unit = 'days' // o.invoicingPeriod.unit
+  period.anticipated.value = o.currentReading.time
+    ? (timeNow() - o.currentReading.time) /
+      86400000 *
+      period.anticipated.multiplier // millisec to days rounded down * multiplier, if applicable
+    : (timeNow() - o.startReading.time) /
+      86400000 *
+      period.anticipated.multiplier
 
   console.info(
     'metered period: ',
@@ -307,21 +442,21 @@ function calcEntitlement (o) {
   )
   console.info(
     'calculated period: ',
-    period.inAdvance.value / period.inAdvance.multiplier,
+    period.anticipated.value / period.anticipated.multiplier,
     ' ',
-    period.inAdvance.unit
+    period.anticipated.unit
   )
   console.info(
     'sum: ',
-    (period.metered.value + period.inAdvance.value) /
-      period.inAdvance.multiplier
+    (period.metered.value + period.anticipated.value) /
+      period.anticipated.multiplier
   )
 
   /* Calc entitlement for energy sold */
 
   if (
-    energy.metered.multiplier !== energy.inAdvance.multiplier ||
-    energy.metered.unit !== energy.inAdvance.unit
+    energy.metered.multiplier !== energy.anticipated.multiplier ||
+    energy.metered.unit !== energy.anticipated.unit
   ) {
     console.warn(
       'energy multipliers und units must be the same! (should be 1000 and "watthours")'
@@ -331,11 +466,11 @@ function calcEntitlement (o) {
   entitlement.energy = {}
   entitlement.energy.rate = o.salesPartner.rate.energy
   entitlement.energy.base =
-    energy.metered.multiplier === energy.inAdvance.multiplier &&
-    energy.metered.unit === energy.inAdvance.unit
+    energy.metered.multiplier === energy.anticipated.multiplier &&
+    energy.metered.unit === energy.anticipated.unit
       ? energy.metered
       : undefined
-  entitlement.energy.base.value += energy.inAdvance.value
+  entitlement.energy.base.value += energy.anticipated.value
 
   entitlement.energy.multiplier =
     entitlement.energy.base.multiplier * entitlement.energy.rate.multiplier
@@ -346,8 +481,8 @@ function calcEntitlement (o) {
   /* Calc entitlement for contract duration period */
 
   if (
-    period.metered.multiplier !== period.inAdvance.multiplier ||
-    period.metered.unit !== period.inAdvance.unit
+    period.metered.multiplier !== period.anticipated.multiplier ||
+    period.metered.unit !== period.anticipated.unit
   ) {
     console.warn(
       'period multipliers und units must be the same! (should be 1000 and "days")'
@@ -357,11 +492,13 @@ function calcEntitlement (o) {
   entitlement.period = {}
   entitlement.period.rate = o.salesPartner.rate.basicFee
   entitlement.period.base =
-    period.metered.multiplier === period.inAdvance.multiplier &&
-    period.metered.unit === period.inAdvance.unit
-      ? period.inAdvance
+    period.metered.multiplier === period.anticipated.multiplier &&
+    period.metered.unit === period.anticipated.unit
+      ? period.anticipated
       : undefined
-  entitlement.period.base.value += period.metered.value
+  entitlement.period.base.value = Math.floor(
+    period.anticipated.value + period.metered.value
+  ) // floor here!
 
   entitlement.period.multiplier =
     entitlement.period.base.multiplier * entitlement.period.rate.multiplier
@@ -377,95 +514,78 @@ function calcEntitlement (o) {
 /**
  * function createTxMaterial
  */
-function createTxMaterial (tenantId, customerId, entitlementObj) {
-  let txLedgerAddress = ''
-  let txPeriod = {}
-  let txEnergy = {}
+function createTxMaterial (salesPartnerId, meterId, entitlementObj) {
+  let calcEnergyAccount = () =>
+    createNode(
+      namespace(meterId + '-energy', app.rootnode.tenantId),
+      '0x01c9fd253bb4ea7613354177616e5e7bd0f6a23b5e33227dac8db0c7a63b5911'
+    )
+  let calcRetentionAccount = () =>
+    createNode(
+      namespace(meterId + '-duration', app.rootnode.tenantId),
+      '0xc58055c8e7a8b21f72985868adbf3d4ba32787f6e07482801f0536a617aaf458'
+    )
+  let entitlementAccount = () =>
+    createNode(
+      namespace('entitlement', salesPartnerId),
+      '0xd36326bec6763a05e3ae2277412a2af31eb412aa8bffa228f11b440f1ad1ac08'
+    )
+  let txEnergy = entitlementObj.energy
+  let txPeriod = entitlementObj.period
 
-  return (
-    getRelation(node.wallet.address, 42, node)
-      .then(rootledger => {
-        if (rootledger === '0x0000000000000000000000000000000000000000') {
-          return createLedger(node).then(newRootledger => {
-            txLedgerAddress = newRootledger
-          })
-        } else {
-          txLedgerAddress = rootledger
-        }
-      })
-      .then(() => {
-        let string = namespace(customerId + '-period', tenantId)
-        console.info(string, ' => ', hash(string))
-        return fetchTxAddress(node, string).then(fromAddress => {
-          txPeriod.fromAddress = fromAddress
-        })
-      })
-      .then(() => {
-        return fetchTxAddress(
-          node,
-          namespace(customerId + '-energy', tenantId)
-        ).then(fromAddress => {
-          txEnergy.fromAddress = fromAddress
-        })
-      })
-      .then(() => {
-        console.log(namespace('entitlement', tenantId, true))
-        return fetchTxAddress(
-          node,
-          namespace('entitlement', tenantId)
-        ).then(toAddress => {
-          txPeriod.toAddress = toAddress
-          txEnergy.toAddress = toAddress
-        })
-      })
-      .then(() => {
-        console.log('ledgerAddress: ', txLedgerAddress)
-        return fetchAccountSoll(
-          txLedgerAddress,
-          txPeriod.fromAddress,
-          node
-        ).then(onChainEntitlement => {
-          txPeriod.value =
-            entitlementObj.period.value - onChainEntitlement > 0
-              ? entitlementObj.period.value - onChainEntitlement
-              : 0
-          txPeriod.base = Math.round(
-            txPeriod.value /
-              entitlementObj.period.rate.value /
-              entitlementObj.period.base.multiplier
-          )
-          console.log('txPeriod:  ', txPeriod)
-        })
-      })
-      .then(() => {
-        console.log(txEnergy.fromAddress)
-        return fetchAccountSoll(
-          txLedgerAddress,
-          txEnergy.fromAddress,
-          node
-        ).then(onChainEntitlement => {
-          txEnergy.value =
-            entitlementObj.energy.value - onChainEntitlement > 0
-              ? entitlementObj.energy.value - onChainEntitlement
-              : 0
-          txEnergy.base = Math.round(
-            txEnergy.value /
-              entitlementObj.energy.rate.value /
-              entitlementObj.energy.base.multiplier
-          )
-          console.log('txEnergy:  ', txEnergy)
-        })
-      })
-      // .then(() => {
-      //   console.log('----Ledger----')
-      //   console.log(txLedgerAddress)
-      //   console.log('----txPeriod----')
-      //   console.log(txPeriod)
-      //   console.log('----txEnergy----')
-      //   console.log(txEnergy)
-      // })
-      .catch(err => console.error(err))
+  txEnergy.___senderNode = calcEnergyAccount
+  // txEnergy.___toNode = entitlementAccount
+  txEnergy.fromAddress = calcEnergyAccount().wallet.address
+  txEnergy.toAddress = entitlementAccount().wallet.address
+
+  txPeriod.___senderNode = calcRetentionAccount
+  // txPeriod.___toNode = entitlementAccount
+  txPeriod.fromAddress = calcRetentionAccount().wallet.address
+  txPeriod.toAddress = entitlementAccount().wallet.address
+
+  console.log(
+    'calcEnergyAccount privateKey: ',
+    calcEnergyAccount().wallet.privateKey
   )
+  console.log(
+    'calcRetentionAccount privateKey: ',
+    calcRetentionAccount().wallet.privateKey
+  )
+  console.log(
+    'entitlementAccount privateKey: ',
+    entitlementAccount().wallet.privateKey
+  )
+  return serialPromise([
+    // check if counter references ledger
+    () => prepareTxNodes(node, calcEnergyAccount, entitlementAccount),
+    () => prepareTxNodes(node, calcRetentionAccount, entitlementAccount)
+  ])
+    .then(res => {
+      console.log('res from serial prepare TxNodes: ', res)
+    })
+    .then(() => {
+      return Promise.all([
+        fetchMeterpointReading(txEnergy.fromAddress).then(reading => {
+          console.log('energyCounter reading: ')
+          console.log('power:  ', reading.power.toNumber())
+          console.log(
+            'debug txEnergy base - energyCounter value raw!: ',
+            txEnergy.base.value - reading.power.toNumber()
+          )
+          txEnergy.base.value -= reading.power.toNumber()
+          txEnergy.value = txEnergy.base.value * txEnergy.rate.value
+          return txEnergy
+        }),
+        fetchMeterpointReading(txPeriod.fromAddress).then(reading => {
+          console.log('retentionCounter: ')
+          console.log('days:  ', reading.power.toNumber())
+          txPeriod.base.value -= reading.power.toNumber()
+          txPeriod.value = txPeriod.base.value * txPeriod.rate.value
+          return txPeriod
+        })
+      ])
+    })
+    .catch(err => console.error(err))
 }
 
 /**
@@ -488,6 +608,27 @@ function createLedger (n, overwriteExisting) {
 }
 
 /**
+ * function addSenderToLedger
+ */
+function addSenderToLedger (n, senderAddress, ledgerAddress) {
+  return n
+    .stromkontoproxy(ledgerAddress)
+    .then(ledger => {
+      return ledger.modifySender(senderAddress, true)
+    })
+    .then(tx => {
+      console.info(
+        'added address ',
+        senderAddress,
+        ' as sender to ledger ',
+        ledgerAddress
+      )
+      return ledgerAddress
+    })
+    .catch(err => console.error(err, 'something is wrong'))
+}
+
+/**
  * function fetchTxAddress
  */
 function fetchTxAddress (n, namespacedStrg, createNew) {
@@ -504,7 +645,7 @@ function fetchTxAddress (n, namespacedStrg, createNew) {
       let cNode = ethers.Wallet.createRandom()
       // let cNode = createNodeKeys(namespacedStrg, fury)
       console.log('node address:', node.wallet.address)
-      console.log('cNode: ', cNode)
+      console.log('cNode address: ', cNode.address)
       return setRelation(
         n,
         hash(namespacedStrg),
@@ -521,16 +662,74 @@ function fetchTxAddress (n, namespacedStrg, createNew) {
   })
 }
 
-function createNodeKeys (extid, f) {
-  let cn = new f.Node({
+/**
+ * function createNode
+ */
+function createNode (extid, privateKey) {
+  return new fury.Node({
     external_id: extid,
+    privateKey: privateKey || undefined,
+    rpc: 'https://fury.network/rpc',
+    abilocation:
+      'https://unpkg.com/stromdao-businessobject@0.5.17/smart_contracts/',
     testMode: true
   })
-  return {
-    extid: extid,
-    address: cn.wallet.address,
-    privateKey: cn.wallet.privateKey
-  }
+}
+
+function prepareTxNodes (rootnode, calcNode, entitlementNode) {
+  let rnAddress = rootnode().wallet.address
+  let cnAddress = calcNode().wallet.address
+  let enAddress = entitlementNode().wallet.address
+  return Promise.all([
+    getRelation(rnAddress, 42),
+    getRelation(cnAddress, 42),
+    getRelation(cnAddress, 43)
+  ])
+    .then(arr => {
+      let rootLedgerAddress = arr[0]
+      let calcLedgerAddress = arr[1]
+      let entitlementAccountAddress = arr[2]
+      if (rootLedgerAddress === '0x0000000000000000000000000000000000000000') {
+        /*  NOTE: We could automatically create the required root ledger, and call it a day.
+            But for now its better to throw an exeption.
+        */
+        throw new Error(
+          "Fuck! Rootnode ledger is not set! It's pointing to: " +
+            rootLedgerAddress
+        )
+        // console.error('No ledger on rootnode: ', rootLedgerAddress)
+        // return createLedger(rootnode())
+        //   .then(newRootledger => {
+        //     return prepareTxNodes(rootnode, calcNode, entitlementNode)
+        //   })
+      }
+      if (
+        calcLedgerAddress === '0x0000000000000000000000000000000000000000' ||
+        calcLedgerAddress !== rootLedgerAddress ||
+        entitlementAccountAddress !== enAddress
+      ) {
+        // extend rootLedger write Permission to calcNode
+        return addSenderToLedger(
+          rootnode(),
+          calcNode().wallet.address,
+          rootLedgerAddress
+        )
+          .then(() => {
+            // reference root ledger address in calcNode roleLookup register 42
+            return setRelation(calcNode(), 42, rootLedgerAddress)
+          })
+          .then(() => {
+            // reference salesPartner entitlement account in calcNode roleLookup register 43
+            setRelation(calcNode(), 43, entitlementNode().wallet.address)
+            return rootLedgerAddress
+          })
+      }
+      console.info(
+        'Everything goes just swimmingly: Transaction nodes have been bootsraped, checked and approved.'
+      )
+      return rootLedgerAddress
+    })
+    .catch(err => console.error(err))
 }
 
 /**
@@ -550,7 +749,7 @@ function namespace (strg, tenantId, appendYear) {
 function getRelation (address, key, n) {
   // (0x0000, 93401849032184, => 0x000
   if (!n) {
-    n = node
+    n = node()
   }
   return n
     .roleLookup()
@@ -655,5 +854,5 @@ function serialPromise (funcs) {
 function hash (strg) {
   return Math.abs(djb(strg))
 }
-
+createTestRun()
 module.exports = { createTestRun, calcEntitlement }
