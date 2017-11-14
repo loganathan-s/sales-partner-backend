@@ -191,32 +191,78 @@ function createTestRun () {
             entObj
           )
         })
-        .then(txArray => {
+        .then(txMaterial => {
           console.log('------THE TX MATERIAL-------')
-          console.log(txArray)
-          let txObj = txArray[0]
-          console.log(
-            'counter reset test: ',
-            txObj.___calcAccountReading.power.toNumber() + txObj.base.value
+          console.log(txMaterial)
+          return Promise.all(
+            txMaterial.map(tx => {
+              // TODO: Turn this into extrnal function `submitEntitlement(tx)` that that we can call `Promise.all(txMaterial.map(submitEntitlement(tx))`
+              if (tx.value > 100000) {
+                return getRelation(tx.fromAddress, 42)
+                  .then(txLedger => {
+                    return txLedger ===
+                      '0x0000000000000000000000000000000000000000'
+                      ? new Error(
+                        'no leger reference in roleLookup register 42 of sending node ',
+                        tx.fromAddress
+                      )
+                      : addTx(
+                        tx.___senderNode(),
+                        txLedger,
+                        tx.fromAddress,
+                        tx.toAddress,
+                        tx.value,
+                        tx.base.value
+                      )
+                        .then(() => {
+                          return fetchMeterpointReading(tx.fromAddress)
+                        })
+                        .then(calcAccountReading => {
+                          return storeMeterpointReading(
+                            tx.___senderNode(),
+                            calcAccountReading.power.toNumber() +
+                                tx.base.value
+                          )
+                        })
+                  })
+                  .catch(err => console.error(err))
+              }
+
+              if (tx.value < -100000 && tx.base.value < 0) {
+                // return 'energy skiped' }
+                return getRelation(tx.fromAddress, 42)
+                  .then(txLedger => {
+                    return txLedger ===
+                      '0x0000000000000000000000000000000000000000'
+                      ? new Error(
+                        'no leger reference in roleLookup register 42 of sending node ',
+                        tx.fromAddress
+                      )
+                      : // if tx.value is regative we reverse the tx flow and book from entitlementAccount to calcAccount
+                      addTx(
+                        tx.___senderNode(),
+                        txLedger,
+                        tx.toAddress,
+                        tx.fromAddress,
+                        Math.abs(tx.value),
+                        Math.abs(tx.base.value)
+                      )
+                        .then(() => {
+                          return fetchMeterpointReading(tx.fromAddress)
+                        })
+                        .then(calcAccountReading => {
+                          return storeMeterpointReading(
+                            tx.___senderNode(),
+                            calcAccountReading.power.toNumber() +
+                                tx.base.value
+                          )
+                        })
+                  })
+                  .catch(err => console.error(err))
+              }
+              return 'Skipped tx: tx.value too low'
+            })
           )
-          // Promise.all(txArray.map(tx => {
-          //   if (tx.value > 100000) {
-          //     return addTx(tx.___fromNode(), tx.ledger, tx.fromAddress, tx.toAddress, tx.value, tx.base.value)
-          //       .then(() => {
-          //         console.log(tx)
-          //         storeMeterpointReading(tx.___fromNode(), tx.___calcAccountReading.power.toNumber() + tx.base.value)
-          //     })
-          //   }
-
-          //   if (tx.value < 0 || tx.base.value < 0)  { // return 'energy skiped' }
-          //     return addTx(tx.___fromNode(), tx.ledger, tx.toAddress, tx.fromAddress, Math.abs(tx.value), Math.abs(tx.base.value))
-          //       .then(() => {
-          //         storeMeterpointReading(tx.___fromNode(), tx.___calcAccountReading.power.toNumber() + tx.base.value)
-          //       })
-          //   }
-
-          //   return 'Skipped tx: tx.value too low'
-          // }))
         })
         .catch(err => console.error(err))
     }
@@ -487,13 +533,13 @@ function createTxMaterial (salesPartnerId, meterId, entitlementObj) {
   let txEnergy = entitlementObj.energy
   let txPeriod = entitlementObj.period
 
-  txEnergy.___fromNode = calcEnergyAccount
-  txEnergy.___toNode = entitlementAccount
+  txEnergy.___senderNode = calcEnergyAccount
+  // txEnergy.___toNode = entitlementAccount
   txEnergy.fromAddress = calcEnergyAccount().wallet.address
   txEnergy.toAddress = entitlementAccount().wallet.address
 
-  txPeriod.___fromNode = calcRetentionAccount
-  txPeriod.___toNode = entitlementAccount
+  txPeriod.___senderNode = calcRetentionAccount
+  // txPeriod.___toNode = entitlementAccount
   txPeriod.fromAddress = calcRetentionAccount().wallet.address
   txPeriod.toAddress = entitlementAccount().wallet.address
 
@@ -514,15 +560,8 @@ function createTxMaterial (salesPartnerId, meterId, entitlementObj) {
     () => prepareTxNodes(node, calcEnergyAccount, entitlementAccount),
     () => prepareTxNodes(node, calcRetentionAccount, entitlementAccount)
   ])
-    .then(l1 => {
-      console.log('l1 from serial: ', l1)
-      return getRelation(node().wallet.address, 42).then(l => {
-        console.log('ledgerAddress: ', l)
-        txEnergy.ledger = l
-        txPeriod.ledger = l
-        // console.log('   txEnergy    ', txEnergy)
-        // console.log('   txPeriod    ', txPeriod)
-      })
+    .then(res => {
+      console.log('res from serial prepare TxNodes: ', res)
     })
     .then(() => {
       return Promise.all([
@@ -533,34 +572,16 @@ function createTxMaterial (salesPartnerId, meterId, entitlementObj) {
             'debug txEnergy base - energyCounter value raw!: ',
             txEnergy.base.value - reading.power.toNumber()
           )
-          txEnergy.___calcAccountReading = reading
           txEnergy.base.value -= reading.power.toNumber()
           txEnergy.value = txEnergy.base.value * txEnergy.rate.value
-          // txEnergy.value = (txEnergy.base.value < 0) ? 0 : txEnergy.base.value * txEnergy.rate.value
-          // console.log(txEnergy)
           return txEnergy
-          // if (txEnergy.value < 100000) return 'energy skiped'
-          // return addTx(energyCounter(), txEnergy.ledger, txEnergy.fromAddress, txEnergy.toAddress, txEnergy.value, txEnergy.base.value)
-          //   .then(tx => {
-          //     console.log(tx)
-          //     return storeMeterpointReading(energyCounter(), reading.power.toNumber() + txEnergy.base.value)
-          //   })
         }),
         fetchMeterpointReading(txPeriod.fromAddress).then(reading => {
           console.log('retentionCounter: ')
           console.log('days:  ', reading.power.toNumber())
-          txPeriod.___calcAccountReading = reading
           txPeriod.base.value -= reading.power.toNumber()
           txPeriod.value = txPeriod.base.value * txPeriod.rate.value
-          // txPeriod.value = (txPeriod.base.value < 0) ? 0 : txPeriod.base.value * txPeriod.rate.value
-          // console.log('txPeriod   ', txPeriod)
           return txPeriod
-          // if (txPeriod.value < 100000) return 'Retention skiped'
-          // return addTx(retentionCounter(), txPeriod.ledger, txPeriod.fromAddress, txPeriod.toAddress, txPeriod.value, txPeriod.base.value)
-          //   .then(tx => {
-          //     console.log(tx)
-          //     return storeMeterpointReading(retentionCounter(), reading.power.toNumber() + txPeriod.base.value)
-          //   })
         })
       ])
     })
@@ -833,4 +854,5 @@ function serialPromise (funcs) {
 function hash (strg) {
   return Math.abs(djb(strg))
 }
+createTestRun()
 module.exports = { createTestRun, calcEntitlement }
