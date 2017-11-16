@@ -228,7 +228,7 @@ function createTestRun () {
                   .catch(err => console.error(err))
               }
 
-              if (tx.value < -100000 && tx.base.value < 0) {
+              if ((tx.value < -100000 && tx.base.value < 0) || 1 === 1) {
                 // return 'energy skiped' }
                 return getRelation(tx.fromAddress, 42)
                   .then(txLedger => {
@@ -854,5 +854,4 @@ function serialPromise (funcs) {
 function hash (strg) {
   return Math.abs(djb(strg))
 }
-createTestRun()
 module.exports = { createTestRun, calcEntitlement }
