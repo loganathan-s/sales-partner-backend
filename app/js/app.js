@@ -228,7 +228,7 @@ function createTestRun () {
                   .catch(err => console.error(err))
               }
 
-              if ((tx.value < -100000 && tx.base.value < 0) || 1 === 1) {
+              if (tx.value < -100000 && tx.base.value < 0) {
                 // return 'energy skiped' }
                 return getRelation(tx.fromAddress, 42)
                   .then(txLedger => {
