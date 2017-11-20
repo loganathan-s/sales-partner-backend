@@ -2,7 +2,7 @@ const Hapi = require('hapi')
 const Joi = require('joi')
 const S = Joi.string
 const scheduledJobs = require('../lib/scheduledJobs')
-
+const createTestRun = require('../app/js/app').createTestRun
 const server = new Hapi.Server()
 
 server.connection({ port: process.env.PORT || 3000 })
@@ -29,6 +29,16 @@ server.route([
       },
       validate: {
         query: { address: S().required(), key: S().required() }
+      }
+    }
+  },
+  {
+    method: 'GET',
+    path: '/createTransaction',
+    config: {
+      handler: function (request, reply) {
+        createTestRun()
+        reply(`Transaction created`)
       }
     }
   }
