@@ -854,5 +854,4 @@ function serialPromise (funcs) {
 function hash (strg) {
   return Math.abs(djb(strg))
 }
-createTestRun()
 module.exports = { createTestRun, calcEntitlement }
